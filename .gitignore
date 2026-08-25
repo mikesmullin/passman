@@ -1,0 +1,37 @@
+# Working / scratch
+/tmp/
+*.log
+.DS_Store
+Thumbs.db
+
+# Dependencies & package managers
+node_modules/
+.bun/
+
+# Electrobun / app build outputs
+dist/
+build/
+out/
+.electrobun/
+artifacts/
+
+# Secrets & local env
+.env
+.env.*
+!.env.example
+
+# KeePass vaults (never commit real password databases)
+*.kdbx
+*.kdb
+*.key
+*.keyx
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.directory

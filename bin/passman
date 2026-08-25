@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# Global entrypoint: `passman` on $PATH
+#
+# Desktop UI:  passman | passman gui | passman app   (quiet by default; -v / --verbose)
+# CLI proxy: passman read|run|list|get|item ...
+#
+# Flag convention:
+#   PASSMAN_VAULT=<file>   vault path (required for CLI data commands)
+#   -v / --verbose         diagnostics (desktop + CLI)
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  LINK="$(readlink "$SOURCE")"
+  if [[ "$LINK" == /* ]]; then
+    SOURCE="$LINK"
+  else
+    SOURCE="$DIR/$LINK"
+  fi
+done
+BIN_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+ROOT="$(cd "$BIN_DIR/.." && pwd)"
+
+export PASSMAN_CWD="${PASSMAN_CWD:-$(pwd)}"
+export WEBKIT_DISABLE_COMPOSITING_MODE="${WEBKIT_DISABLE_COMPOSITING_MODE:-1}"
+export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
+
+ELECTROBUN="$ROOT/node_modules/.bin/electrobun"
+ELECTROBUN_NATIVE="$ROOT/node_modules/electrobun/bin/electrobun"
+CLI_MAIN="$ROOT/src/cli/main.coffee"
+COFFEE_PRELOAD="$ROOT/scripts/coffee-plugin.js"
+BUN_BIN="${BUN_BIN:-$(command -v bun || true)}"
+
+PASSMAN_VERBOSE="${PASSMAN_VERBOSE:-0}"
+
+vlog() {
+  if [ "$PASSMAN_VERBOSE" = "1" ] || [ "$PASSMAN_VERBOSE" = "true" ]; then
+    echo "$@" >&2
+  fi
+}
+
+usage() {
+  cat <<EOF
+passman — KeePass vaults (desktop + op-style CLI)
+
+Desktop:
+  passman                 Launch UI (quiet; vaults relative to cwd)
+  passman gui|app         Same
+  passman web             Launch browser development UI
+  passman -v | --verbose  Launch UI with diagnostics on stderr
+
+CLI (requires Passman desktop agent access):
+  passman read  <ref>              Resolve passman://ITEM/FIELD
+  passman run   -- <cmd> [args]    Inject secret refs from env into a process
+  passman list                     List entries
+  passman get   <item>             Show entry (--reveal for password)
+  passman item  create|edit|delete Entry CRUD (secrets via stdin JSON)
+  passman mcp                      Start a local MCP stdio server
+
+  -v, --verbose                    Diagnostics on stderr
+  passman help                     CLI help
+  passman path                     Install + cwd info
+
+Master password: UI only. Open Passman, unlock a vault, then enable Accessible for agents.
+
+Secret references (vault is PASSMAN_VAULT, not in the URI):
+  passman://GitHub/password
+
+Examples:
+  passman list
+  passman read passman://GitHub/password
+  DB_PASS=passman://Postgres/password passman run -- psql
+  passman run --env-file .env -- npm start
+EOF
+}
+
+consume_gui_verbose_flags() {
+  local out=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -v|--verbose)
+        PASSMAN_VERBOSE=1
+        shift
+        ;;
+      *)
+        out+=("$1")
+        shift
+        ;;
+    esac
+  done
+  GUI_ARGS=("${out[@]+"${out[@]}"}")
+}
+
+cmd="${1:-}"
+
+case "$cmd" in
+  read|run|list|get|item|help)
+    if [ -z "$BUN_BIN" ]; then
+      echo "passman: bun not found on PATH" >&2
+      exit 1
+    fi
+    if [ ! -f "$ROOT/src/agent-cli.mjs" ]; then
+      echo "passman: missing $ROOT/src/agent-cli.mjs" >&2
+      exit 1
+    fi
+    cd "$PASSMAN_CWD"
+    exec "$BUN_BIN" "$ROOT/src/agent-cli.mjs" "$@"
+    ;;
+  mcp)
+    if [ -z "$BUN_BIN" ]; then
+      echo "passman: bun not found on PATH" >&2
+      exit 1
+    fi
+    exec "$BUN_BIN" "$ROOT/src/mcp.mjs"
+    ;;
+  path)
+    echo "install:  $ROOT"
+    echo "vault cwd: $PASSMAN_CWD"
+    echo "PASSMAN_VAULT: ${PASSMAN_VAULT:-"(unset)"}"
+    echo "cli:      $CLI_MAIN"
+    echo "electrobun: $ELECTROBUN"
+    exit 0
+    ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  build)
+    shift || true
+    consume_gui_verbose_flags "$@"
+    set -- "${GUI_ARGS[@]+"${GUI_ARGS[@]}"}"
+    cd "$ROOT"
+    if [ "$PASSMAN_VERBOSE" = "1" ] || [ "$PASSMAN_VERBOSE" = "true" ]; then
+      exec "$ELECTROBUN" build "$@"
+    else
+      exec "$ELECTROBUN" build "$@" >/dev/null
+    fi
+    ;;
+  web)
+    shift || true
+    if [ -z "$BUN_BIN" ]; then
+      echo "passman: bun not found on PATH" >&2
+      exit 1
+    fi
+    cd "$ROOT"
+    exec -a passman "$BUN_BIN" "$ROOT/scripts/web-dev.mjs" "$@"
+    ;;
+  ""|gui|app|desktop|dev|-v|--verbose)
+    if [ -n "${1:-}" ] && { [ "$1" = "gui" ] || [ "$1" = "app" ] || [ "$1" = "desktop" ] || [ "$1" = "dev" ]; }; then
+      shift || true
+    fi
+    consume_gui_verbose_flags "$@"
+    set -- "${GUI_ARGS[@]+"${GUI_ARGS[@]}"}"
+
+    if [ ! -x "$ELECTROBUN" ]; then
+      echo "passman: electrobun not found at $ELECTROBUN" >&2
+      echo "         run: cd $ROOT && bun install" >&2
+      exit 1
+    fi
+    if [ ! -x "$ELECTROBUN_NATIVE" ]; then
+      echo "passman: native electrobun CLI not found at $ELECTROBUN_NATIVE" >&2
+      echo "         run: cd $ROOT && bun install" >&2
+      exit 1
+    fi
+
+    export PASSMAN_VERBOSE
+    vlog "passman: vault cwd = $PASSMAN_CWD"
+    vlog "passman: install   = $ROOT  (electrobun dev)"
+    cd "$ROOT"
+
+    if [ "$PASSMAN_VERBOSE" = "1" ] || [ "$PASSMAN_VERBOSE" = "true" ]; then
+      exec -a passman "$ELECTROBUN_NATIVE" dev "$@"
+    else
+      # Keep stderr so a failed launch is visible; hush Electrobun's stdout chatter.
+      exec -a passman "$ELECTROBUN_NATIVE" dev "$@" \
+        >/dev/null
+    fi
+    ;;
+  *)
+    echo "passman: unknown command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

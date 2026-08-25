@@ -1,0 +1,36 @@
+{
+  "name": "passman",
+  "version": "0.1.0",
+  "author": "Mike Smullin <mike@smullindesign.com>",
+  "dependencies": {
+    "@fontsource/manrope": "^5.3.0",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@phosphor-icons/web": "^2.1.2",
+    "coffeescript": "^2.7.0",
+    "electrobun": "^1.18.1",
+    "kdbxweb": "^2.1.1",
+    "yaml": "^2.9.0"
+  },
+  "bin": {
+    "passman": "./bin/passman"
+  },
+  "exports": {
+    "./lib": "./src/lib.mjs"
+  },
+  "description": "KeePass-compatible password manager POC (Electrobun + m-js + kdbxweb)",
+  "license": "MIT",
+  "scripts": {
+    "start": "bun run dev",
+    "dev": "env WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 electrobun dev",
+    "dev:raw": "electrobun dev",
+    "web": "bun run scripts/web-dev.mjs",
+    "build": "electrobun build",
+    "cli": "bun run src/cli/main.coffee",
+    "demo:vault": "bun run scripts/vault-demo.coffee",
+    "link:global": "mkdir -p \"$HOME/.local/bin\" && ln -sfn \"$(pwd)/bin/passman\" \"$HOME/.local/bin/passman\" && chmod +x bin/passman && echo \"linked: $HOME/.local/bin/passman -> $(pwd)/bin/passman\""
+  },
+  "type": "module",
+  "devDependencies": {
+    "chokidar": "4.0.3"
+  }
+}
