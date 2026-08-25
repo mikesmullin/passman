@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Passman</title>
+    <!-- views:// absolute paths are more reliable than relative in WebKit -->
+    <link rel="stylesheet" href="views://public/index.css" />
+    <link rel="stylesheet" href="views://public/phosphor/style.css" />
+    <link rel="stylesheet" href="views://public/manrope/400.css" />
+    <link rel="stylesheet" href="views://public/manrope/600.css" />
+    <style>
+      /* Inline fallback so a blank window is never pure white if CSS fails to load */
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: #0d0d18;
+        color: #f5f1fa;
+        font-family: Manrope, system-ui, sans-serif;
+      }
+      #boot-error {
+        display: none;
+        margin: 1rem;
+        padding: 1rem;
+        border: 1px solid #ff6b7a;
+        background: rgba(255, 107, 122, 0.12);
+        border-radius: 10px;
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 13px;
+      }
+      #boot-error.visible { display: block; }
+    </style>
+  </head>
+  <body>
+    <div id="boot-error"></div>
+    <!-- Keep #app empty: m.js mounts by *inserting* into the container and
+         does not wipe pre-existing children, so a "Loading…" placeholder
+         would stick around above the real UI. -->
+    <div id="app"></div>
+    <script>
+      // Canary: proves HTML/JS execution works even if the external bundle fails.
+      window.__PASSMAN_HTML_OK__ = true;
+      console.log("[passman] inline canary ok");
+      window.addEventListener("error", function (ev) {
+        var el = document.getElementById("boot-error");
+        if (!el) return;
+        el.textContent = "Script error: " + (ev.message || ev.error);
+        el.classList.add("visible");
+      });
+    </script>
+    <!-- Classic script: Electrobun bundles views as a single file (not ESM). -->
+    <script src="index.js" onerror="document.getElementById('boot-error').textContent='Failed to load index.js';document.getElementById('boot-error').classList.add('visible')"></script>
+  </body>
+</html>
